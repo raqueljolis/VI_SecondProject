@@ -12,13 +12,14 @@ def general_data_preparation(mass_shootings):
 
     mass_shootings['Incident Date'] = pd.to_datetime(mass_shootings['Incident Date'])
     mass_shootings['Month_Year'] = mass_shootings['Incident Date'].dt.to_period('M')
+    mass_shootings['Year'] = mass_shootings['Month_Year'].apply(lambda x: x.year)
     mass_shootings = mass_shootings.drop('Incident Date', axis=1)
  
     # grouping BY STATE AND MONTH
-    mass_shootings_states = mass_shootings.groupby(['State', 'Month_Year', 'Region', 'Population']).size().reset_index(name='Total Shootings')
+    mass_shootings_states = mass_shootings.groupby(['State', 'Month_Year', 'Year', 'Region', 'Population']).size().reset_index(name='Total Shootings')
     
     # grouping BY REGION AND MONTH
-    mass_shootings_regions = mass_shootings.groupby(['Region', 'Month_Year']).size().reset_index(name='Total Shootings')
+    mass_shootings_regions = mass_shootings.groupby(['Region', 'Month_Year', 'Year']).size().reset_index(name='Total Shootings')
     region_population = mass_shootings_states.drop_duplicates('State').groupby(['Region'])['Population'].sum()
     mass_shootings_regions = mass_shootings_regions.merge(region_population, on='Region')
     
@@ -35,7 +36,6 @@ def second_question(mass_shootings_regions):
     # - scatterplot with 12 points (1 per month), 2014 in x-axis, chosen year in y-axis
 
     #################### DATA PREPARATION ####################
-    mass_shootings_regions['Year'] = mass_shootings_regions['Month_Year'].apply(lambda x: x.year)
     mass_shootings_regions = mass_shootings_regions.drop('Month_Year', axis=1)
     mass_shootings_regions = mass_shootings_regions.groupby(['Region', 'Year', 'Population'])['Total Shootings'].sum().reset_index()
     mass_shootings_regions['Shootings per 10M citizens'] = mass_shootings_regions['Total Shootings'] / mass_shootings_regions['Population'] * 10**7
