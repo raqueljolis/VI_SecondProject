@@ -8,6 +8,8 @@ import geopandas as gpd
 from shapely.geometry import Point
 from shapely.geometry import Polygon, MultiPolygon
 
+st.set_page_config(layout = 'wide')
+
 def general_data_preparation(mass_shootings):
 
     mass_shootings['Incident Date'] = pd.to_datetime(mass_shootings['Incident Date'])
@@ -16,7 +18,7 @@ def general_data_preparation(mass_shootings):
     mass_shootings = mass_shootings.drop('Incident Date', axis=1)
  
     # grouping BY STATE AND MONTH
-    mass_shootings_states = mass_shootings.groupby(['State', 'Month_Year', 'Year', 'Region', 'Population']).size().reset_index(name='Total Shootings')
+    mass_shootings_states = mass_shootings.groupby(['State', 'Month_Year', 'Year','FIPS', 'Region', 'Population']).size().reset_index(name='Total Shootings')
     
     # grouping BY REGION AND MONTH
     mass_shootings_regions = mass_shootings.groupby(['Region', 'Month_Year', 'Year']).size().reset_index(name='Total Shootings')
@@ -25,9 +27,101 @@ def general_data_preparation(mass_shootings):
     
     return mass_shootings_regions, mass_shootings_states
 
-#################### Q1 ####################
-# - linechart, 5 lines, a line per region, being able to choose years
-# - map with regions, select state --> linechart with all states of the region
+
+
+def first_question(mass_shootings_regions, mass_shootings_states):
+    #################### Q1 ####################
+    # - linechart, 5 lines, a line per region, being able to choose years
+    # - map with regions, select state --> linechart with all states of the region
+    mass_shootings_regions['Month_Year'] = mass_shootings_regions['Month_Year'].dt.to_timestamp()
+    mass_shootings_states['Month_Year'] = mass_shootings_states['Month_Year'].dt.to_timestamp()
+    
+
+    mass_shootings_regions = mass_shootings_regions.groupby(['Region', 'Month_Year', 'Year'])['Total Shootings'].sum().reset_index()
+    mass_shootings_states = mass_shootings_states.groupby(['State', 'Region', 'Month_Year', 'Year','FIPS'])['Total Shootings'].sum().reset_index()
+
+    mass_shootings_states['FIPS'] = pd.to_numeric(mass_shootings_states['FIPS'], errors='coerce')
+
+    shared_selection = alt.selection_multi(fields=['Region'])
+    state_selection = alt.selection_multi(fields = ['State'])
+
+    color_palette = ['#E69F00', '#56B4E9', '#009E73', '#0072B2', '#CC79A7']
+    region_order = sorted(mass_shootings_regions['Region'].unique())
+    
+    line_chart_regions = alt.Chart(mass_shootings_regions).mark_line().encode(
+        alt.X('Month_Year:T', axis=alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
+        alt.Y('Total Shootings:Q',axis = alt.Axis(titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
+        alt.Color('Region:N', legend=None, scale=alt.Scale(range=color_palette, domain=region_order)),
+        opacity=alt.condition(shared_selection, alt.value(1), alt.value(0.2)),
+        tooltip = ['Region:N', 'Month_Year:T', 'Total Shootings:Q']
+    ).add_selection(
+        shared_selection
+    ).properties(
+        width = 800,
+        height = 400
+    )   
+
+    legend = alt.Chart(mass_shootings_regions).mark_circle(size=100).encode(
+        alt.Y('Region:N', axis = alt.Axis(title = 'Region', titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
+        alt.Color('Region:N', scale=alt.Scale(range=color_palette, domain=region_order)), 
+        opacity=alt.condition(shared_selection, alt.value(1), alt.value(0.2))
+    ).add_params(shared_selection)
+
+    Q1_first_chart = alt.hconcat(legend, line_chart_regions)
+
+    USA_states = alt.topo_feature(data.us_10m.url, 'states')
+
+    state_shootings_map = alt.Chart(USA_states).transform_lookup(
+        lookup = 'id',
+        from_ = alt.LookupData(mass_shootings_states, 'FIPS', ['Region', 'State'])
+    ).mark_geoshape(stroke='darkgray').encode(
+        color=alt.Color('Region:N', legend=None, scale = alt.Scale(range = color_palette, domain=region_order)), 
+        tooltip = ['Region:N', 'State:N'], 
+        opacity=alt.condition(shared_selection, alt.value(1), alt.value(0.2))
+    ).add_selection(
+        shared_selection
+    ).add_selection(
+        state_selection
+    ).properties(
+        title="US States by Region"
+    ).project(type='albersUsa')
+
+
+    color = alt.condition(state_selection, alt.Color('State:N', scale = alt.Scale(scheme = 'tableau10'), legend = None), alt.value('lightgray'))
+    
+    line_chart_states = alt.Chart(mass_shootings_states).transform_filter(
+        shared_selection
+    ).mark_line().encode(
+        alt.X('Month_Year:T', axis=alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
+        alt.Y('Total Shootings:Q', axis = alt.Axis(titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
+        color = color,
+        tooltip = ['State:N', 'Region:N', 'Month_Year:T', 'Total Shootings:Q']
+    ).add_selection(
+        state_selection
+    ).transform_filter(
+        state_selection
+    ).properties(
+        width = 800,
+        height = 400
+    )  
+
+    legend2 = alt.Chart(mass_shootings_states).transform_filter(
+        shared_selection
+    ).mark_circle(size=100).encode(
+        alt.Y('State:N', axis = alt.Axis(title = 'State', titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
+        alt.Color('State:N', scale = alt.Scale(scheme = 'tableau10'))
+    ).add_params(state_selection)
+
+    Q1_second_line_chart = alt.hconcat(line_chart_states, legend2)
+
+    Q1_final_chart_2 = alt.vconcat(Q1_first_chart,Q1_second_line_chart).resolve_scale(color='independent')
+    Q1_final_chart_2 = alt.hconcat(Q1_final_chart_2, state_shootings_map)
+
+
+
+
+    return Q1_final_chart_2
+
 
 
 def second_question_barchart(mass_shootings_regions):
@@ -105,12 +199,12 @@ def second_question_slopechart(mass_shootings_regions):
 
     for region in mass_shootings_regions['Region'].unique():
         for year in mass_shootings_regions['Year'].unique():
-        new_row = pd.DataFrame({
-            'Region': [region],
-            'Year': [year],
-            'Comparison': ['2014'],
-            'Shootings per 10M citizens': [mass_shootings_2014[mass_shootings_2014['Region'] == region]['Shootings per 10M citizens'].iloc[0]]
-        })
+            new_row = pd.DataFrame({
+                'Region': [region],
+                'Year': [year],
+                'Comparison': ['2014'],
+                'Shootings per 10M citizens': [mass_shootings_2014[mass_shootings_2014['Region'] == region]['Shootings per 10M citizens'].iloc[0]]
+            })
         
         mass_shootings_regions = pd.concat([mass_shootings_regions, new_row], ignore_index=True)
 
@@ -245,19 +339,25 @@ def third_question(mass_shootings, counties_gdf):
     
     county_shootings = county_shootings.reset_index().rename(columns={'index': 'County'})
 
+
 def main():
     mass_shootings = pd.read_csv('MassShootings.csv')
     counties_gdf = gpd.read_file('Counties.geojson')
 
     mass_shootings_regions, mass_shootings_states = general_data_preparation(mass_shootings)
+
+    Q1_linechart_final = first_question(mass_shootings_regions, mass_shootings_states)
+
     Q2_barchart_final = second_question_barchart(mass_shootings_regions)
     Q2_slopecharts_final = second_question_slopechart(mass_shootings_regions)
 
-    st.set_page_config(layout = 'wide')
     st.markdown('## Analysis of the evolution of Mass Shootings in the US')
     st.markdown('**Authors:** Raquel Jolis Carné and Martina Massana Massip')
 
+    st.altair_chart(Q1_linechart_final)
+
     st.altair_chart(Q2_slopecharts_final, use_container_width=True)
+    
 
 if __name__ == '__main__':
     main()
