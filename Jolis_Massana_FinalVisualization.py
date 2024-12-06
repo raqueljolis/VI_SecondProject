@@ -206,7 +206,7 @@ def second_question_slopechart(mass_shootings_regions):
                 'Shootings per 10M citizens': [mass_shootings_2014[mass_shootings_2014['Region'] == region]['Shootings per 10M citizens'].iloc[0]]
             })
         
-        mass_shootings_regions = pd.concat([mass_shootings_regions, new_row], ignore_index=True)
+            mass_shootings_regions = pd.concat([mass_shootings_regions, new_row], ignore_index=True)
 
     # separating the dataset by regions for posterior plot juxtaposition
     mass_shootings_midwest = mass_shootings_regions[mass_shootings_regions['Region'] == 'Midwest']
