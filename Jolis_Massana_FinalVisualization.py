@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import datetime as dt
-from vega_datasets import data
+alt.data_transformers.enable('vegafusion')
 
-st.set_page_config(layout = 'wide')
+from vega_datasets import data
+from itertools import product
 
 def general_data_preparation(mass_shootings):
 
@@ -19,11 +19,12 @@ def general_data_preparation(mass_shootings):
     # grouping BY REGION AND MONTH
     mass_shootings_regions = mass_shootings.groupby(['Region', 'Month_Year', 'Year']).size().reset_index(name='Total Shootings')
     region_population = mass_shootings_states.drop_duplicates('State').groupby(['Region'])['Population'].sum()
-    mass_shootings_regions = mass_shootings_regions.merge(region_population, on='Region')
+    mass_shootings_regions = mass_shootings_regions.merge(region_population, on = 'Region')
     
     return mass_shootings_regions, mass_shootings_states
 
-def line_chart_states(mass_shootings_states, region_selection, state_selection,  date_selection):
+
+def Q1_line_chart_states(mass_shootings_states, region_selection, state_selection,  date_selection):
 
     color_west = ['#6f0036', '#68028b', '#920597', '#b20258', '#a80686', '#bd02f3', '#d3088c', '#e80576', '#dc09e3', '#9c4088', '#f967ae']
     midwest_scale = alt.Scale(scheme='oranges')
@@ -97,7 +98,8 @@ def line_chart_states(mass_shootings_states, region_selection, state_selection, 
 
     return all_upper_states, all_legends
 
-def line_chart_regions(mass_shootings_regions, region_selection, date_selection, color_region):
+
+def Q1_line_chart_regions(mass_shootings_regions, region_selection, date_selection, color_region):
 
     """ Returns the line chart of mass shootings over the years, differentiating the regions"""
     # Lines for all regions
@@ -147,16 +149,35 @@ def line_chart_regions(mass_shootings_regions, region_selection, date_selection,
 
 
 
+#---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
 
 def first_question(mass_shootings_regions, mass_shootings_states):
-    
+
     #--------------- DATA PREPARATION ---------------#
 
     mass_shootings_regions = mass_shootings_regions.groupby(['Region', 'Month_Year', 'Year'])['Total Shootings'].sum().reset_index()
     mass_shootings_states = mass_shootings_states.groupby(['State', 'Region', 'Month_Year', 'Year','FIPS'])['Total Shootings'].sum().reset_index()
+    
+    dates = pd.date_range(start = '2014-01', end = '2023-12', freq = 'MS')
+    states = mass_shootings_states['State'].unique()
+    regions_states = mass_shootings_states[['Region', 'State']].drop_duplicates()
 
+    # crossing both lists to obtain a continuous dataframe with all dates-state pairs
+    date_state_combinations = list(product(dates, states))
+
+    cont_mass_shootings_states = pd.DataFrame(date_state_combinations, columns = ['Month_Year', 'State'])
+    cont_mass_shootings_states['Month_Year'] = cont_mass_shootings_states['Month_Year'].dt.to_period('M').dt.to_timestamp()
+    cont_mass_shootings_states['Shootings_Base'] = 0
+    cont_mass_shootings_states = cont_mass_shootings_states.merge(regions_states, on = ['State'], how = 'inner')
+
+    mass_shootings_states = cont_mass_shootings_states.merge(mass_shootings_states, on = ['Month_Year', 'State', 'Region'], how = 'left')
+    mass_shootings_states['Total Shootings'] = mass_shootings_states['Total Shootings'].fillna(mass_shootings_states['Shootings_Base'])
+    mass_shootings_states = mass_shootings_states.drop('Shootings_Base', axis=1)
     mass_shootings_states['FIPS'] = pd.to_numeric(mass_shootings_states['FIPS'], errors='coerce')
 
+    
     state_selection = alt.selection_point(fields = ['State'])
     region_selection = alt.selection_point(fields = ['Region'])
     date_selection = alt.selection_interval(encodings=['x'])
@@ -166,7 +187,8 @@ def first_question(mass_shootings_regions, mass_shootings_states):
     color_region = alt.condition(region_selection, alt.Color('Region:N', scale = alt.Scale(range = color_palette, domain = region_order), legend = None), alt.value('lightgray'))
 
     #--------------- REGION LINE CHART PLOTTING ---------------#
-    Q1_first_chart = line_chart_regions(mass_shootings_regions, region_selection, date_selection, color_region)
+
+    Q1_first_chart = Q1_line_chart_regions(mass_shootings_regions, region_selection, date_selection, color_region)
     
 
     #--------------- CHOROPLETH PLOTTING ---------------#
@@ -189,7 +211,8 @@ def first_question(mass_shootings_regions, mass_shootings_states):
 
 
     #--------------- STATE LINE CHART PLOTTING ---------------#    
-    all_upper_states, all_legends = line_chart_states(mass_shootings_states, region_selection, state_selection, date_selection)
+
+    all_upper_states, all_legends = Q1_line_chart_states(mass_shootings_states, region_selection, state_selection, date_selection)
     
     final_chart_states = alt.layer(*all_upper_states).resolve_scale(color='independent')
 
@@ -201,65 +224,6 @@ def first_question(mass_shootings_regions, mass_shootings_states):
     Q1_final_chart_2 = alt.vconcat(Q1_final_chart_2, Q1_second_line_chart)
 
     return Q1_final_chart_2
-
-
-def second_question_barchart(mass_shootings_regions):
-    #################### Q2 ####################
-    # - grouped barcharts, pair of bars, one for 2014 and the other for the chosen year
-
-    #--------------- DATA PREPARATION ---------------#
-
-    mass_shootings_regions = mass_shootings_regions.drop('Month_Year', axis=1)
-    mass_shootings_regions = mass_shootings_regions.groupby(['Region', 'Year', 'Population'])['Total Shootings'].sum().reset_index()
-    mass_shootings_regions['Shootings per 10M citizens'] = mass_shootings_regions['Total Shootings'] / mass_shootings_regions['Population'] * 10**7
-
-    
-    #--------------- BAR CHART PLOTTING ---------------#
-
-    Q2a_selection_year = alt.selection_point(encodings = ['color'])
-    color = alt.condition(Q2a_selection_year,
-                        alt.Color('Year:O', legend = None),
-                        alt.value('lightgray')
-    )
-
-    Q2_years_barchart = alt.Chart(mass_shootings_regions).mark_bar().encode(
-        x = 'Year:O',
-        y = 'Shootings per 10M citizens:Q',
-        color = color,
-        tooltip = 'Shootings per 10M citizens:Q'
-    ).properties(
-        width = 155,
-        height = 400
-    ).add_params(Q2a_selection_year)
-
-    Q2_2014_barchart = alt.Chart(mass_shootings_regions).mark_bar().encode(
-        x = 'Year:O',
-        y = 'Shootings per 10M citizens:Q',
-        color = alt.condition(
-            alt.datum.Year == 2014,
-            alt.value('#bcdcec'),
-            alt.value('transparent')
-        ),
-        tooltip = 'Shootings per 10M citizens:Q'
-    )
-
-    legend_2014 = alt.Chart(mass_shootings_regions).transform_filter(
-        alt.datum.Year == 2014
-    ).mark_circle().encode(
-        alt.Y('Year:O', title='Reference Year').axis(orient='right'),
-        color = 'Year:O',
-    )
-
-    legend = alt.Chart(mass_shootings_regions).transform_filter(
-        alt.datum.Year > 2014
-    ).mark_circle().encode(
-        alt.Y('Year:O').axis(orient='right'),
-        color = color,
-    ).add_params(Q2a_selection_year)
-
-    Q2_barchart_final = (Q2_years_barchart + Q2_2014_barchart).facet(column = 'Region:N') | (legend_2014 & legend)
-
-    return Q2_barchart_final 
 
 
 def second_question_slopechart(mass_shootings_regions):
@@ -484,14 +448,12 @@ def main():
 
     mass_shootings_regions, mass_shootings_states = general_data_preparation(mass_shootings)
 
+    st.set_page_config(layout = 'wide')
     st.markdown('## Analysis of the evolution of Mass Shootings in the US')
     st.markdown('**Authors:** Raquel Jolis Carné and Martina Massana Massip')
 
     Q1_linechart_final = first_question(mass_shootings_regions, mass_shootings_states)
     st.altair_chart(Q1_linechart_final)
-    
-    #Q1_linechart_final = prova(mass_shootings_regions, mass_shootings_states)
-    #st.altair_chart(Q1_linechart_final)
 
     Q2_slopecharts_final = second_question_slopechart(mass_shootings_regions)
     st.altair_chart(Q2_slopecharts_final, use_container_width=True)
