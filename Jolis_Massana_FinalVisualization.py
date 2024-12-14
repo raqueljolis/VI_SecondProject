@@ -23,12 +23,9 @@ def general_data_preparation(mass_shootings):
     
     return mass_shootings_regions, mass_shootings_states
 
-def line_chart_states(mass_shootings_states, region_name, date_selection):
+def line_chart_states(mass_shootings_states, region_selection, state_selection,  date_selection):
 
-    state_selection = alt.selection_point(fields = ['State'])
-    region_selection = alt.selection_point(fields = ['Region'])
-
-    color_west = ['#6f0036','#e80576', '#d3088c', '#f967ae', '#68028b',  '#a80686', '#9c4088', '#dc09e3', '#920597', '#bd02f3', '#b20258']
+    color_west = ['#6f0036', '#68028b', '#920597', '#b20258', '#a80686', '#bd02f3', '#d3088c', '#e80576', '#dc09e3', '#9c4088', '#f967ae']
     midwest_scale = alt.Scale(scheme='oranges')
     northeast_scale = alt.Scale(scheme='tealblues')
     southest_scale = alt.Scale(scheme='greens')
@@ -40,57 +37,71 @@ def line_chart_states(mass_shootings_states, region_name, date_selection):
     color_params_northeast = alt.condition(state_selection, alt.Color('State:N', scale = northeast_scale, legend = None), alt.value('lightgray'))
     color_params_seast = alt.condition(state_selection, alt.Color('State:N', scale = southest_scale, legend = None), alt.value('lightgray'))
     color_params_swest = alt.condition(state_selection, alt.Color('State:N', scale = alt.Scale(range = color_southwest), legend = None), alt.value('lightgray'))
-    
-    if region_name == 'West':
-        color = color_params_west
-    elif region_name == 'Midwest':
-        color = color_params_midwest
-    elif region_name == 'Northeast':
-        color = color_params_northeast
-    elif region_name == 'Southwest':
-        color = color_params_swest
-    else:
-        color = color_params_seast
 
-    background_lines_states = alt.Chart(mass_shootings_states).mark_line(opacity=0.2).add_params(
-        state_selection
-    ).encode(
-        alt.X('Month_Year:T', axis = alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
-        alt.Y('Total Shootings:Q', axis = alt.Axis(titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
-        tooltip = ['State:N', 'Region:N', 'Month_Year:T', 'Total Shootings:Q'],
-        color = color
-    ).properties(
-        width = 800,
-        height = 400
-    )  
+    regions = {
+    'West': color_params_west,
+    'Midwest': color_params_midwest,
+    'Northeast': color_params_northeast,
+    'Southwest': color_params_swest,
+    'Southeast': color_params_seast
+    }
 
-    highlighted_line_states = alt.Chart(mass_shootings_states).mark_line().encode(
-        alt.X('Month_Year:T'),
-        alt.Y('Total Shootings:Q'),
-        color=color,
-        tooltip= ['State:N', 'Region:N', 'Month_Year:T', 'Total Shootings:Q'],
-    ).transform_filter(
-        state_selection 
-    ) 
+    all_upper_states = []
+    all_legends = []
 
-    upper_states = (background_lines_states  + highlighted_line_states).encode(
-        alt.X('Month_Year:T', axis=alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)).scale(domain = date_selection)
-    )
+    for region_name, color in regions.items(): 
 
-    legend = alt.Chart(mass_shootings_states).mark_circle(size=100).encode(
-        alt.Y('State:N', axis = alt.Axis(title = region_name, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
-        color = color
-    ).add_params(
-        state_selection
-    )
+        region_data = mass_shootings_states[mass_shootings_states['Region'] == region_name]
 
-    return upper_states, legend
+
+        background_lines_states = alt.Chart(region_data).mark_line(opacity=0.5).transform_filter(
+            region_selection
+        ).add_params(
+            state_selection
+        ).encode(
+            alt.X('Month_Year:T', axis = alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
+            alt.Y('Total Shootings:Q', axis = alt.Axis(titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
+            tooltip = ['State:N', 'Region:N', 'Month_Year:T', 'Total Shootings:Q'],
+            color = color
+        ).properties(
+            width = 800,
+            height = 400
+        )  
+
+        highlighted_line_states = alt.Chart(region_data).mark_line().transform_filter(
+            region_selection
+        ).encode(
+            alt.X('Month_Year:T'),
+            alt.Y('Total Shootings:Q'),
+            color=color,
+            tooltip= ['State:N', 'Region:N', 'Month_Year:T', 'Total Shootings:Q'],
+        ).transform_filter(
+            state_selection 
+        ) 
+
+        upper_states = (background_lines_states  + highlighted_line_states).encode(
+            alt.X('Month_Year:T', axis=alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)).scale(domain = date_selection)
+        )
+
+        legend = alt.Chart(region_data).mark_circle(size=100).encode(
+            alt.Y('State:N', axis = alt.Axis(title = region_name, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
+            color = color
+        ).add_params(
+            state_selection
+        ).add_params(
+            region_selection
+        )
+
+        all_upper_states.append(upper_states)
+        all_legends.append(legend)
+
+    return all_upper_states, all_legends
 
 def line_chart_regions(mass_shootings_regions, region_selection, date_selection, color_region):
 
     """ Returns the line chart of mass shootings over the years, differentiating the regions"""
     # Lines for all regions
-    background_lines_regions = alt.Chart(mass_shootings_regions).mark_line(opacity=0.2).encode(
+    background_lines_regions = alt.Chart(mass_shootings_regions).mark_line(opacity=0.5).encode(
         alt.X('Month_Year:T', axis=alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
         alt.Y('Total Shootings:Q',axis = alt.Axis(titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
         color = color_region,
@@ -178,28 +189,13 @@ def first_question(mass_shootings_regions, mass_shootings_states):
 
 
     #--------------- STATE LINE CHART PLOTTING ---------------#    
-    chart_west, legend_west = line_chart_states(mass_shootings_states[mass_shootings_states['Region'] == 'West'],'West', date_selection)
-    chart_seast, legend_seast = line_chart_states(mass_shootings_states[mass_shootings_states['Region'] == "Southeast"], "Southeast", date_selection)
-    chart_swest, legend_swest = line_chart_states(mass_shootings_states[mass_shootings_states['Region'] == "Southwest"], "Southwest", date_selection)
-    chart_midwest, legend_midwest = line_chart_states(mass_shootings_states[mass_shootings_states['Region'] == "Midwest"],  "Midwest", date_selection)
-    chart_northeast, legend_northeast = line_chart_states(mass_shootings_states[mass_shootings_states['Region'] == "Northeast"], "Northeast", date_selection)
+    all_upper_states, all_legends = line_chart_states(mass_shootings_states, region_selection, state_selection, date_selection)
+    
+    final_chart_states = alt.layer(*all_upper_states).resolve_scale(color='independent')
 
-    all_chart_states = alt.layer(
-        chart_west,
-        chart_midwest,
-        chart_northeast,
-        chart_seast,
-        chart_swest
-    ).properties(
-        width=800,
-        height=400
-    ).transform_filter(
-        region_selection
-    ).resolve_scale(color = 'independent')
+    final_legend = alt.hconcat(*all_legends).resolve_scale(color='independent')
 
-    legend2 = alt.hconcat(legend_west, legend_midwest, legend_northeast, legend_seast, legend_swest).resolve_scale(color = 'independent').add_params(region_selection)
-
-    Q1_second_line_chart = alt.hconcat(all_chart_states, legend2)
+    Q1_second_line_chart = alt.hconcat(final_chart_states, final_legend)
 
     Q1_final_chart_2 = alt.hconcat(Q1_first_chart, state_shootings_map)
     Q1_final_chart_2 = alt.vconcat(Q1_final_chart_2, Q1_second_line_chart)
