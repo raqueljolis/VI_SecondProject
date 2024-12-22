@@ -17,7 +17,7 @@ def general_data_preparation(mass_shootings, county_population):
     mass_shootings = mass_shootings.drop('Incident Date', axis=1)
  
     # grouping BY STATE AND MONTH
-    mass_shootings_states = mass_shootings.groupby(['State', 'Month,Year', 'Year', 'FIPS', 'Region', 'Population']).size().reset_index(name='Total Shootings')
+    mass_shootings_states = mass_shootings.groupby(['State', 'State_Lon', 'State_Lat', 'Abbreviation', 'Month,Year', 'Year', 'FIPS', 'Region', 'Population']).size().reset_index(name='Total Shootings')
     
     # grouping BY REGION AND MONTH
     mass_shootings_regions = mass_shootings.groupby(['Region', 'Month,Year', 'Year']).size().reset_index(name='Total Shootings')
@@ -50,29 +50,7 @@ def general_data_preparation(mass_shootings, county_population):
         {'County FIPS': 51515, 'County Name': 'Bedford, VA', 'County Population': 6777},
     ])
     county_population = pd.concat([county_population, missing_counties], ignore_index=True)
-     
-    us_states = {"AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas", "CA": "California", 
-             "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware", "FL": "Florida", "GA": "Georgia", 
-             "HI": "Hawaii", "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", 
-             "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland", 
-             "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi", 
-             "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada", 
-             "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York", 
-             "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma", 
-             "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina", 
-             "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah", "VT": "Vermont", 
-             "VA": "Virginia", "WA": "Washington", "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming"}
-    
-    split_columns = county_population['County Name'].str.split(', ', expand=True)
-    county_population['County Name'] = split_columns[0]
-    county_population['State Abbr'] = split_columns[1]
-
-    county_population['State'] = county_population['State Abbr'].map(us_states)
-
-    county_population = county_population[['County FIPS','County Name', 'State', 'County Population']]
-
-    
-
+    county_population = county_population[county_population['County FIPS']%1000 != 0] # erasing State FIPS
     
     return mass_shootings, mass_shootings_regions, mass_shootings_states, county_population
 
@@ -89,7 +67,7 @@ def Q1_line_chart_regions(mass_shootings_regions, region_selection, date_selecti
         color = color_region,
         tooltip = ['Region:N', 'Month,Year:T', 'Total Shootings:Q']
     ).properties(
-        width = 900,
+        width = 700,
         height = 300,
         title = alt.TitleParams(text = 'Mass Shootings in U.S. Regions (2014-2024)',fontSize = 18, color = 'black', fontWeight='bold')
     ).add_params(region_selection)
@@ -157,15 +135,15 @@ def Q1_region_state_charts(mass_shootings_states, region_selection, state_select
     USA_states = alt.topo_feature(data.us_10m.url, 'states')
     all_state_linecharts, all_state_choropleths = list(), list()
 
+    #--------------- STATE CHOROPLETH PLOTTING ---------------#
    
     base_choropleth = alt.Chart(USA_states).mark_geoshape().transform_lookup(
         lookup = 'id',
         from_ = alt.LookupData(mass_shootings_states, 'FIPS', ['Region', 'State'])
     ).properties(
-        width = 520,
-        height = 350
-    ).project(type='albersUsa'
-    ).add_params(
+        width = 550,
+        height = 250
+    ).project(type='albersUsa').add_params(
         state_selection   
     ).transform_filter(
         region_selection
@@ -182,7 +160,7 @@ def Q1_region_state_charts(mass_shootings_states, region_selection, state_select
             tooltip = ['State:N', 'Region:N', 'Month,Year:T', 'Total Shootings:Q'],
             color = color
         ).properties(
-            width = 900,
+            width = 650,
             height = 300, 
             title = alt.TitleParams(text = 'Mass Shootings in U.S. States (2014-2024)',fontSize = 18, color = 'black', fontWeight='bold') 
         ).add_params(state_selection)
@@ -219,9 +197,8 @@ def Q1_region_state_charts(mass_shootings_states, region_selection, state_select
 
 def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass_shootings, county_population):
 
-
     mass_shootings_regions = mass_shootings_regions.groupby(['Region', 'Month,Year', 'Year'])['Total Shootings'].sum().reset_index()
-    mass_shootings_states = mass_shootings_states.groupby(['State', 'Region', 'Month,Year', 'Year','FIPS'])['Total Shootings'].sum().reset_index()
+    mass_shootings_states = mass_shootings_states.groupby(['State', 'State_Lon', 'State_Lat', 'Abbreviation', 'Region', 'Month,Year', 'Year','FIPS'])['Total Shootings'].sum().reset_index()
 
     mass_shootings['State_City_Combo'] = mass_shootings['City Or County'] + ' - ' + mass_shootings['State']
     mass_shootings_counties = mass_shootings.groupby(['State_City_Combo', 'Region', 'State']).size().reset_index(name='Total Shootings').sort_values(by='State_City_Combo', ascending=False)
@@ -231,9 +208,6 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
     mass_shootings_top3_counties = mass_shootings.groupby(['State_City_Combo', 'City Or County', 'State', 'Region', 'Month,Year']).size().reset_index(name='Total Shootings')
     mass_shootings_top3_counties = mass_shootings_top3_counties.merge(top3_counties, on=['State_City_Combo'], how='inner')
     
-    mass_shootings_top3_counties = mass_shootings_top3_counties.merge(county_population[['County FIPS', 'County Name', 'State']], left_on= ['City Or County', 'State'], right_on = ['County Name', 'State'], how = 'left')
-    
-
     # 3-color palette per region for the county line charts --> 3 counties = 3 colors
     region_palette = {
         'West': ['#830e3e', '#ca3170', '#d04ea7'],  # pink shades
@@ -276,8 +250,8 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
         state_selection
     ).properties(
         title = alt.TitleParams(text = 'State-by-State Overview of Mass Shootings (2014-2024)',fontSize = 18, color = 'black', fontWeight='bold'), 
-        width = 520,
-        height = 350
+        width = 550,
+        height = 250
     ).project(type = 'albersUsa')
 
     total_mass_shootings = alt.Chart(mass_shootings).transform_aggregate(
@@ -303,39 +277,21 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
     state_linecharts, state_choropleths = Q1_region_state_charts(mass_shootings_states, region_selection, state_selection, date_selection)
     
     final_state_linechart = alt.layer(*state_linecharts).resolve_scale(color = 'independent')
+
+    #--------------- STATE CHOROPLETH PLOTTING ---------------#    
+
     final_state_choropleth = alt.layer(*state_choropleths).resolve_scale(color = 'independent')
+    
+    state_abbreviations = alt.Chart(mass_shootings_states).mark_text().encode(
+        longitude = 'State_Lon:Q',
+        latitude = 'State_Lat:Q',
+        color = alt.value('white'),
+        text = 'Abbreviation:N'
+    ).project(type = 'albersUsa')
+
+    final_state_map = final_state_choropleth + state_abbreviations
 
     #--------------- TOP 3 COUNTY LINE CHART PLOTTING ---------------#
-    state_shape_base = alt.Chart(USA_states).transform_lookup(
-        lookup = 'id',
-        from_ = alt.LookupData(mass_shootings, 'FIPS', ['list(mass_shootings.columns)'])
-    ).mark_geoshape(
-        stroke = 'black',
-        fill = 'transparent'
-    ).encode(tooltip = ['State:N']).project(type = 'albersUsa').add_params(state_selection).properties(
-        width = 520,
-        height = 350
-    ).transform_filter(
-        state_selection
-    )
-
-    Qextra_county_map = alt.Chart(USA_counties).transform_lookup(
-        lookup = 'id',
-        from_ = alt.LookupData(county_population, 'County FIPS', list(county_population.columns))
-    ).mark_geoshape(
-        stroke = 'darkgray',
-        strokeWidth = 0.5,
-        opacity = 0.7
-    ).project(type = 'albersUsa').properties(
-        width = 520,
-        height = 350
-    ).transform_filter(
-        state_selection
-    )
-
-
-    
-    final_counties_choropleth = alt.layer(state_shape_base, Qextra_county_map)
 
     county_linecharts = list()
     y_domain = [0, mass_shootings_top3_counties['Total Shootings'].max()]
@@ -352,7 +308,7 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
                 legend = None
             ),alt.value('lightgray'))
         ).properties(
-            width = 900,
+            width = 700,
             height = 300,
             title = alt.TitleParams(text = 'Top 3 counties by mass shootings in the selected state (2014-2024)', fontSize = 18, color = 'black', fontWeight='bold') 
         ).add_params(
@@ -361,6 +317,8 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
             state_selection
         ).transform_filter(
             region_selection
+        ).transform_filter(
+            date_selection
         )
 
         highlighted_top3_counties = alt.Chart(mass_shootings_top3_counties).mark_line(point = True, size = 2).encode(
@@ -374,7 +332,7 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
             opacity = opacity_county,
             tooltip = ['City Or County:N', 'State:N', 'Total Shootings:Q']
         ).properties(
-            width = 900,
+            width = 700,
             height = 300,
             title = alt.TitleParams(text = 'Top 3 counties by mass shootings in the selected state (2014-2024)', fontSize = 18, color = 'black', fontWeight='bold') 
         ).transform_filter(
@@ -383,24 +341,26 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
             state_selection
         ).transform_filter(
             region_selection
+        ).transform_filter(
+            date_selection
         )
-
 
         county_linecharts.append(alt.layer(background_top3_counties, highlighted_top3_counties).transform_filter(alt.datum.State == state_name))
 
 
     final_county_linechart = alt.layer(*county_linecharts).resolve_scale(color = 'independent')
 
-    
+
 
     #--------------- FINAL DISPLAY ---------------#
 
-    region_state_choropleths = alt.vconcat(final_region_choropleth, final_state_choropleth, spacing = 250)
-    #Q1_region_state_dashboard = alt.hconcat(region_state_choropleths, region_linechart, spacing = 50)
-    state_county_linecharts = alt.vconcat(region_linechart, final_state_linechart, final_county_linechart)
+    # region_state_choropleths = alt.vconcat(final_region_choropleth, final_state_choropleth, spacing = 250)
+    # state_county_linecharts = alt.vconcat(region_linechart, final_state_linechart, final_county_linechart)
+    
+    choropleths_state_linechart = alt.vconcat(final_region_choropleth, final_state_map, final_state_linechart, spacing = 55)
+    region_county_linecharts = alt.vconcat(region_linechart, final_county_linechart)
 
-
-    Q1_final_dashboard = alt.hconcat(region_state_choropleths, state_county_linecharts)
+    Q1_final_dashboard = alt.hconcat(choropleths_state_linechart, region_county_linecharts, spacing = 60)
 
     
 
@@ -409,6 +369,7 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
 
 
 def second_question_slopechart(mass_shootings_regions):
+    
     #--------------- DATA PREPARATION ---------------#
 
     mass_shootings_regions = mass_shootings_regions.groupby(['Region', 'Year', 'Population'])['Total Shootings'].sum().reset_index()
@@ -471,8 +432,7 @@ def second_question_slopechart(mass_shootings_regions):
             fontSize = 15,
             color = 'black',
             fontWeight='bold'),
-                    width = 210,
-                    height = 400
+                width = 100
         ).add_params(Q2b_year_selection)
 
         slopecharts_regions.append(slopechart)
@@ -484,7 +444,11 @@ def second_question_slopechart(mass_shootings_regions):
 
 
     Q2_slopecharts = alt.hconcat(*slopecharts_regions)
-    Q2_slopecharts_final = alt.hconcat(Q2_slopecharts, legend)
+    Q2_slopecharts_final = alt.hconcat(Q2_slopecharts, legend).properties(title = alt.TitleParams(
+                                                text = 'Mass shootings per 10M people, by county and with respect to 2014',
+                                                fontSize = 18,
+                                                fontWeight = 'bold',
+                                                color = 'black'))
     
     return Q2_slopecharts_final
 
@@ -493,18 +457,6 @@ def second_question_slopechart(mass_shootings_regions):
 def extra_question(mass_shootings_states, mass_shootings, county_population, Qextra_year_selection):
 
     #--------------- DATA PREPARATION ---------------#
-    
-    missing_counties = pd.DataFrame([
-        {'County FIPS': 2201, 'County Name': 'Prince of Wales-Outer Ketchikan, AK', 'County Population': 5696},
-        {'County FIPS': 2232, 'County Name': 'Skagway-Hoonah-Angoon, AK', 'County Population': 2262},
-        {'County FIPS': 2261, 'County Name': 'Valdez-Cordova, AK', 'County Population': 9202},
-        {'County FIPS': 2270, 'County Name': 'Wade Hampton, AK', 'County Population': 8001},
-        {'County FIPS': 2280, 'County Name': 'Wrangell-Petersburg, AK', 'County Population': 2064},
-        {'County FIPS': 46113, 'County Name': 'Shannon County, SD', 'County Population': 13672},
-        {'County FIPS': 51515, 'County Name': 'Bedford, VA', 'County Population': 6777},
-    ])
-    county_population = pd.concat([county_population, missing_counties], ignore_index=True)
-    county_population = county_population[county_population['County FIPS']%1000 != 0] # erasing State FIPS
 
     USA_counties = alt.topo_feature(data.us_10m.url, 'counties')
     USA_states = alt.topo_feature(data.us_10m.url, 'states')
@@ -522,10 +474,7 @@ def extra_question(mass_shootings_states, mass_shootings, county_population, Qex
     ).mark_geoshape(
         stroke = 'black',
         fill = 'transparent'
-    ).encode(tooltip = ['State:N']).project(type = 'albersUsa').add_params(Qextra_state_selection).properties(
-        width = 520,
-        height = 350
-    )
+    ).encode(tooltip = ['State:N']).project(type = 'albersUsa').add_params(Qextra_state_selection)
 
     Qextra_county_population_map = alt.Chart(USA_counties).transform_lookup(
         lookup = 'id',
@@ -541,16 +490,12 @@ def extra_question(mass_shootings_states, mass_shootings, county_population, Qex
                 title = 'County Population',
                 titleColor = 'black',
                 labelColor = 'black',
-                labelLimit = 500, 
                 orient='bottom'
             ),
             scale=alt.Scale(domain=domain, range=color_range),
         ),
         tooltip = ['County Name:N', 'County Population:Q']
-    ).project(type = 'albersUsa').properties(
-        width = 520,
-        height = 350
-    )
+    ).project(type = 'albersUsa')
 
 
     Qextra_county_shootings = alt.Chart(mass_shootings).mark_circle().encode(
@@ -575,9 +520,6 @@ def extra_question(mass_shootings_states, mass_shootings, county_population, Qex
                 fontSize = 18,
                 fontWeight = 'bold',
                 color = 'black')
-    ).properties(
-        width = 520,
-        height = 350
     )
     
     
@@ -586,13 +528,11 @@ def extra_question(mass_shootings_states, mass_shootings, county_population, Qex
         from_ = alt.LookupData(county_population, 'County FIPS', list(county_population.columns))
     ).mark_geoshape(fill = 'transparent').encode(
         tooltip = ['County Name:N']
-    ).project(type = 'albersUsa').properties(
-        width = 520,
-        height = 350
-    )
+    ).project(type = 'albersUsa')
+
 
     Qextra_choro_scatter_final = alt.layer(state_shape_base, Qextra_county_population_map, Qextra_county_shootings, 
-                                           selected_state_overlay, selected_county_overlay).properties(height = 400)
+                                           selected_state_overlay, selected_county_overlay).properties(height = 475)
     
     return Qextra_choro_scatter_final
 
@@ -603,43 +543,35 @@ def main():
 
     mass_shootings, mass_shootings_regions, mass_shootings_states, county_population = general_data_preparation(mass_shootings, county_population)
 
-    print(county_population.head())
     st.set_page_config(layout = 'wide')
     st.markdown('## Analysis of the evolution of Mass Shootings in the US')
     st.markdown('**Authors:** Raquel Jolis Carné and Martina Massana Massip')
 
     Q1_linechart_final = first_and_third_question(mass_shootings_regions, mass_shootings_states, mass_shootings, county_population)
-    st.altair_chart(Q1_linechart_final,use_container_width=True )
+    st.altair_chart(Q1_linechart_final,use_container_width=True)
 
     Q2_slopecharts_final = second_question_slopechart(mass_shootings_regions)
-    #st.altair_chart(Q2_slopecharts_final,use_container_width=True )
-    
 
-    st.markdown('**Date Year Selector: Analyze Shooting Trends Over Time**')
-    
-    # customizing colors of the slider
-    with st.container():
-        st.markdown(
+    choro_scatter, _, slopecharts = st.columns([1, 0.01, 1.5]) 
+    with choro_scatter:
+        st.markdown( # customization of slider width
             """
             <style>
             div[data-baseweb="slider"] {
-                width: 400px; 
+                width: 550px; 
             }
         
             </style>
             """,
             unsafe_allow_html=True
         )
+        Qextra_year_selection = st.slider('Date Year Selector: Analyze Shooting Trends Over Time', min_value=2014, max_value=2023, step=1, value=2014)
+        Qextra_choro_scatter_final = extra_question(mass_shootings_states, mass_shootings, county_population, Qextra_year_selection)
+        st.altair_chart(Qextra_choro_scatter_final, use_container_width=True)
+    with slopecharts:
+        st.altair_chart(Q2_slopecharts_final, use_container_width=True)
 
-        Qextra_year_selection = st.slider('', min_value=2014, max_value=2023, step=1, value=2014)
-    Qextra_choro_scatter_final = extra_question(mass_shootings_states, mass_shootings, county_population, Qextra_year_selection)
-    #st.altair_chart(Qextra_choro_scatter_final, use_container_width=True)
 
-    final_2_3 = alt.hconcat(Qextra_choro_scatter_final, Q2_slopecharts_final)
-    st.altair_chart(final_2_3, use_container_width = True)
-    
-
-        
 
 if __name__ == '__main__':
     main()
