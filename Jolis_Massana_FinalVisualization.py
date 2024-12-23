@@ -241,7 +241,6 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
     #--------------- REGION CHOROPLETH PLOTTING ---------------#
 
     USA_states = alt.topo_feature(data.us_10m.url, 'states')
-    USA_counties = alt.topo_feature(data.us_10m.url, 'counties')
 
     region_choropleth = alt.Chart(USA_states).transform_lookup(
         lookup = 'id',
@@ -348,7 +347,7 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
             date_selection
         )
 
-         county_linecharts.append(alt.layer(background_top3_counties, highlighted_top3_counties).transform_filter(alt.datum.State == state_name).encode(
+        county_linecharts.append(alt.layer(background_top3_counties, highlighted_top3_counties).transform_filter(alt.datum.State == state_name).encode(
             alt.X('Month,Year:T', axis=alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)))
         )
 
@@ -358,9 +357,6 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
 
     #--------------- FINAL DISPLAY ---------------#
 
-    # region_state_choropleths = alt.vconcat(final_region_choropleth, final_state_choropleth, spacing = 250)
-    # state_county_linecharts = alt.vconcat(region_linechart, final_state_linechart, final_county_linechart)
-    
     choropleths_state_linechart = alt.vconcat(final_region_choropleth, final_state_map, final_state_linechart, spacing = 55)
     region_county_linecharts = alt.vconcat(region_linechart, final_county_linechart)
 
@@ -409,11 +405,13 @@ def second_question_slopechart(mass_shootings_regions):
 
     #--------------- SLOPE CHART PLOTTING ---------------#
 
-    Q2b_year_selection = alt.selection_point(encodings = ['color'])
+    Q2_year_selection = alt.selection_point(encodings = ['color'])
 
-    color = alt.condition(Q2b_year_selection,
-                        alt.Color('Year:N', legend = None, scale = alt.Scale(scheme='category10')),
-                        alt.value('rgba(169, 169, 169, 0.3)')) # different color and lower opacity
+    tealblue_palette = ['#99F0FF', '#66F3FF', '#33EAF2', '#00D8E4', '#00C0CE', '#00A8BA', '#008EA6', '#006E8A', '#004E6F', '#003E5C']
+    color = alt.condition(Q2_year_selection,
+                        alt.Color('Year:N', legend = None, scale = alt.Scale(range = tealblue_palette)),
+                        alt.value('#e0e0e0')) 
+    opacity = alt.condition(Q2_year_selection, alt.value(1), alt.value(0.2)) 
 
     slopecharts_regions = list()
     region_dfs = [mass_shootings_midwest, mass_shootings_northeast, mass_shootings_southeast, mass_shootings_southwest, mass_shootings_west]
@@ -430,6 +428,7 @@ def second_question_slopechart(mass_shootings_regions):
                 scale = alt.Scale(domain = [4,30]),  
                 axis = alt.Axis(titleColor = 'black', labelColor = 'black',titleFontSize = 14, labelFontSize = 12)), 
             color = color,
+            opacity = opacity,
             tooltip = [alt.Tooltip('Shootings per 10M citizens:Q', format='.2f'), 'Year:N']
         ).properties(title = alt.TitleParams(
             text = f'{region}',
@@ -437,14 +436,14 @@ def second_question_slopechart(mass_shootings_regions):
             color = 'black',
             fontWeight='bold'),
                 width = 100
-        ).add_params(Q2b_year_selection)
+        ).add_params(Q2_year_selection)
 
         slopecharts_regions.append(slopechart)
 
     legend = alt.Chart(mass_shootings_regions).mark_circle(size = 100).encode(
         alt.Y('Year:N', axis = alt.Axis(title = 'Year', titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
         color = color
-    ).add_params(Q2b_year_selection)
+    ).add_params(Q2_year_selection)
 
 
     Q2_slopecharts = alt.hconcat(*slopecharts_regions)
@@ -458,7 +457,7 @@ def second_question_slopechart(mass_shootings_regions):
 
 
 
-def extra_question(mass_shootings_states, mass_shootings, county_population, Qextra_year_selection):
+def extra_question(mass_shootings, county_population, Qextra_year_selection):
 
     #--------------- DATA PREPARATION ---------------#
 
@@ -468,18 +467,19 @@ def extra_question(mass_shootings_states, mass_shootings, county_population, Qex
     domain = [2000, 100000, 1000000, 5000000, 10000000]
     color_range = ['#e0e0e0', '#b3b3b3', '#808080', '#4d4d4d', '#2d2d2d']
 
-    Qextra_state_selection = alt.selection_point(fields = ['State'])
-
     #--------------- YEARLY EVOLUTION CHOROPLETH PLOTTING ---------------#
-    
-    state_shape_base = alt.Chart(USA_states).transform_lookup(
+
+    state_shape_overlay = alt.Chart(USA_states).transform_lookup(
         lookup = 'id',
         from_ = alt.LookupData(mass_shootings, 'FIPS', list(mass_shootings.columns))
     ).mark_geoshape(
         stroke = 'black',
         fill = 'transparent'
-    ).encode(tooltip = ['State:N']).project(type = 'albersUsa').add_params(Qextra_state_selection)
-
+    ).encode(tooltip = ['State:N']).project(type = 'albersUsa').properties(
+        width = 580,
+        height = 500
+    )
+    
     Qextra_county_population_map = alt.Chart(USA_counties).transform_lookup(
         lookup = 'id',
         from_ = alt.LookupData(county_population, 'County FIPS', list(county_population.columns))
@@ -500,33 +500,15 @@ def extra_question(mass_shootings_states, mass_shootings, county_population, Qex
         ),
         tooltip = ['County Name:N', 'County Population:Q']
     ).project(type = 'albersUsa')
-
-
+    
     Qextra_county_shootings = alt.Chart(mass_shootings).mark_circle().encode(
         longitude = 'Longitude:Q',
         latitude = 'Latitude:Q',
         size = alt.value(12),
         color = alt.value('#003E5C'),
-        opacity = alt.condition(alt.datum.Year == Qextra_year_selection, alt.value(1), alt.value(0))
+        opacity = alt.condition(alt.datum.Year == Qextra_year_selection, alt.value(0.8), alt.value(0))
     ).project(type = 'albersUsa')
-
-
-    selected_state_overlay = alt.Chart(USA_states).transform_lookup(
-        lookup = 'id',
-        from_ = alt.LookupData(mass_shootings_states, 'FIPS', list(mass_shootings_states.columns))
-    ).mark_geoshape(strokeWidth = 0).encode(
-        color = alt.value('white'),
-        opacity = alt.condition(Qextra_state_selection, alt.value(0), alt.value(1)),
-        tooltip = ['State:N']
-    ).project(type = 'albersUsa').properties(
-        title = alt.TitleParams(
-                text = 'Distribution of shootings per year, by state and county',
-                fontSize = 18,
-                fontWeight = 'bold',
-                color = 'black')
-    )
-    
-    
+       
     selected_county_overlay = alt.Chart(USA_counties).transform_lookup(
         lookup = 'id',
         from_ = alt.LookupData(county_population, 'County FIPS', list(county_population.columns))
@@ -535,8 +517,7 @@ def extra_question(mass_shootings_states, mass_shootings, county_population, Qex
     ).project(type = 'albersUsa')
 
 
-    Qextra_choro_scatter_final = alt.layer(state_shape_base, Qextra_county_population_map, Qextra_county_shootings, 
-                                           selected_state_overlay, selected_county_overlay).properties(height = 475)
+    Qextra_choro_scatter_final = alt.layer(state_shape_overlay, Qextra_county_population_map, Qextra_county_shootings, selected_county_overlay).properties(height = 475)
     
     return Qextra_choro_scatter_final
 
@@ -570,7 +551,7 @@ def main():
             unsafe_allow_html=True
         )
         Qextra_year_selection = st.slider('Date Year Selector: Analyze Mass Shooting Trends Over Time', min_value=2014, max_value=2023, step=1, value=2014)
-        Qextra_choro_scatter_final = extra_question(mass_shootings_states, mass_shootings, county_population, Qextra_year_selection)
+        Qextra_choro_scatter_final = extra_question(mass_shootings, county_population, Qextra_year_selection)
         st.altair_chart(Qextra_choro_scatter_final, use_container_width=True)
     with slopecharts:
         st.altair_chart(Q2_slopecharts_final, use_container_width=True)
