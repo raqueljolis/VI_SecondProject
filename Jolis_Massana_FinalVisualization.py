@@ -65,7 +65,7 @@ def Q1_line_chart_regions(mass_shootings_regions, region_selection, date_selecti
         alt.X('Month,Year:T', axis=alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
         alt.Y('Total Shootings:Q',axis = alt.Axis(titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
         color = color_region,
-        tooltip = ['Region:N', 'Month,Year:T', 'Total Shootings:Q']
+        tooltip = ['Total Shootings:Q','Region:N', 'Month,Year:T']
     ).properties(
         width = 700,
         height = 300,
@@ -81,7 +81,7 @@ def Q1_line_chart_regions(mass_shootings_regions, region_selection, date_selecti
         alt.Y('Total Shootings:Q'),
         color = color_region,
         opacity = opacity_region, 
-        tooltip = ['Region:N', 'Month,Year:T', 'Total Shootings:Q']
+        tooltip = ['Total Shootings:Q', 'Region:N', 'Month,Year:T']
     ).transform_filter(
         region_selection  
     ) 
@@ -142,13 +142,17 @@ def Q1_region_state_charts(mass_shootings_states, region_selection, state_select
         from_ = alt.LookupData(mass_shootings_states, 'FIPS', ['Region', 'State'])
     ).properties(
         width = 550,
-        height = 250
+        height = 250,
+        title = alt.TitleParams(text = 'Interactive Map of U.S. States: Explore Mass Shooting Data (2014–2024)',fontSize = 18, color = 'black', fontWeight='bold')
     ).project(type='albersUsa').add_params(
         state_selection   
     ).transform_filter(
         region_selection
+    ).encode(
+        tooltip = ['Region:N', 'State:N']
     )
 
+    opacity_states = alt.condition(state_selection, alt.value(1), alt.value(0.3))
 
     for region_name, color in regions.items(): 
         region_data = mass_shootings_states[mass_shootings_states['Region'] == region_name]
@@ -157,12 +161,12 @@ def Q1_region_state_charts(mass_shootings_states, region_selection, state_select
         background_lines_states = alt.Chart(region_data).mark_line(opacity = 0.3).transform_filter(region_selection).encode(
             alt.X('Month,Year:T', axis = alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
             alt.Y('Total Shootings:Q', axis = alt.Axis(titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)),
-            tooltip = ['State:N', 'Region:N', 'Month,Year:T', 'Total Shootings:Q'],
+            tooltip = ['Total Shootings:Q', 'State:N', 'Region:N', 'Month,Year:T'],
             color = color
         ).properties(
             width = 650,
             height = 300, 
-            title = alt.TitleParams(text = 'Mass Shootings in U.S. States (2014-2024)',fontSize = 18, color = 'black', fontWeight='bold') 
+            title = alt.TitleParams(text = 'Mass Shootings in U.S. States (2014-2024) in the Selected Region',fontSize = 18, color = 'black', fontWeight='bold') 
         ).add_params(state_selection)
 
         
@@ -175,7 +179,8 @@ def Q1_region_state_charts(mass_shootings_states, region_selection, state_select
             alt.X('Month,Year:T'),
             alt.Y('Total Shootings:Q'),
             color = color,
-            tooltip = ['State:N', 'Region:N', 'Month,Year:T', 'Total Shootings:Q'],
+            opacity = opacity_states,
+            tooltip = ['Total Shootings:Q', 'State:N', 'Region:N', 'Month,Year:T'],
         )
     
 
@@ -246,10 +251,8 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
         tooltip = ['Region:N', 'State:N']
     ).add_params(
         region_selection
-    ).add_params(
-        state_selection
     ).properties(
-        title = alt.TitleParams(text = 'State-by-State Overview of Mass Shootings (2014-2024)',fontSize = 18, color = 'black', fontWeight='bold'), 
+        title = alt.TitleParams(text = 'State-by-State Overview of Mass Shootings (2014-2024) and Region Selection',fontSize = 18, color = 'black', fontWeight='bold'), 
         width = 550,
         height = 250
     ).project(type = 'albersUsa')
@@ -264,7 +267,7 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
         latitude = 'latitude:Q',
         size = alt.Size('count:Q', legend = None),
         color = alt.value('black'),
-        tooltip = [alt.Tooltip('State:N', title = 'State'),alt.Tooltip('count:Q', title = 'Total Mass Shootings')]
+        tooltip = [alt.Tooltip('count:Q', title = 'Total Mass Shootings'), alt.Tooltip('State:N', title = 'State')]
     )
 
     final_region_choropleth = (region_choropleth + total_mass_shootings).add_params(
@@ -310,7 +313,7 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
         ).properties(
             width = 700,
             height = 300,
-            title = alt.TitleParams(text = 'Top 3 counties by mass shootings in the selected state (2014-2024)', fontSize = 18, color = 'black', fontWeight='bold') 
+            title = alt.TitleParams(text = 'Top 3 Counties By Mass Shootings in the Selected State (2014-2024)', fontSize = 18, color = 'black', fontWeight='bold') 
         ).add_params(
             county_selection
         ).transform_filter(
@@ -330,7 +333,7 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
                 legend = None
             ),alt.value('lightgray')),
             opacity = opacity_county,
-            tooltip = ['City Or County:N', 'State:N', 'Total Shootings:Q']
+            tooltip = ['Total Shootings:Q', 'City Or County:N', 'State:N','Region:N', 'Month,Year:T']
         ).properties(
             width = 700,
             height = 300,
@@ -345,8 +348,9 @@ def first_and_third_question(mass_shootings_regions, mass_shootings_states, mass
             date_selection
         )
 
-        county_linecharts.append(alt.layer(background_top3_counties, highlighted_top3_counties).transform_filter(alt.datum.State == state_name))
-
+         county_linecharts.append(alt.layer(background_top3_counties, highlighted_top3_counties).transform_filter(alt.datum.State == state_name).encode(
+            alt.X('Month,Year:T', axis=alt.Axis(title = 'Date', format='%b %Y', labelAngle=-45, titleColor = 'black', labelColor = 'black', titleFontSize = 14, labelFontSize = 12)))
+        )
 
     final_county_linechart = alt.layer(*county_linecharts).resolve_scale(color = 'independent')
 
@@ -426,7 +430,7 @@ def second_question_slopechart(mass_shootings_regions):
                 scale = alt.Scale(domain = [4,30]),  
                 axis = alt.Axis(titleColor = 'black', labelColor = 'black',titleFontSize = 14, labelFontSize = 12)), 
             color = color,
-            tooltip = 'Shootings per 10M citizens:Q'
+            tooltip = [alt.Tooltip('Shootings per 10M citizens:Q', format='.2f'), 'Year:N']
         ).properties(title = alt.TitleParams(
             text = f'{region}',
             fontSize = 15,
@@ -565,7 +569,7 @@ def main():
             """,
             unsafe_allow_html=True
         )
-        Qextra_year_selection = st.slider('Date Year Selector: Analyze Shooting Trends Over Time', min_value=2014, max_value=2023, step=1, value=2014)
+        Qextra_year_selection = st.slider('Date Year Selector: Analyze Mass Shooting Trends Over Time', min_value=2014, max_value=2023, step=1, value=2014)
         Qextra_choro_scatter_final = extra_question(mass_shootings_states, mass_shootings, county_population, Qextra_year_selection)
         st.altair_chart(Qextra_choro_scatter_final, use_container_width=True)
     with slopecharts:
